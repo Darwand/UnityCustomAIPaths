@@ -101,7 +101,7 @@ public class PTPEditor : Editor
         {
             Vector2 screenLocation = e.mousePosition;
 
-            end = null;
+            PTPPoint newEnd = null;
 
             float closestDist = float.MaxValue;
 
@@ -111,9 +111,12 @@ public class PTPEditor : Editor
             {
                 
 
-                if(points[i] == start)
+                if(points[i] == start || points[i] == end)
                 {
-                    Handles.color = Color.green;
+                    if (action == ConnectionAction.Add)
+                        Handles.color = Color.green;
+                    else
+                        Handles.color = Color.red;
                 }
                 else
                 {
@@ -143,7 +146,7 @@ public class PTPEditor : Editor
                         else if (points[i] != start)
                         {
                             closestDist = dist;
-                            end = points[i];
+                            newEnd = points[i];
                         }
                     }
                 }
@@ -152,9 +155,14 @@ public class PTPEditor : Editor
 
             }
 
-            UpdateDragHandles(e);
+            end = newEnd;
 
-            DrawDragLine(e);
+            CheckForActionChange(e);
+
+            if (start != null)
+            {
+                DrawLine(HandleUtility.GUIPointToWorldRay(e.mousePosition).origin);
+            }
             
             CheckEndOfDrag(e);
         }
@@ -209,22 +217,29 @@ public class PTPEditor : Editor
         }
     }
 
-    void DrawDragLine( Event e )
+    void DrawLine( Vector3 endLocation )
     {
-        if (start != null)
+        //set color for the line
+        if (action == ConnectionAction.Add)
         {
-            if (end != null)
-            {
-                Handles.DrawLine(start.GetLocation(), end.GetLocation());
-            }
-            else
-            {
-                Handles.DrawLine(start.GetLocation(), HandleUtility.GUIPointToWorldRay(e.mousePosition).origin);
-            }
+            Handles.color = Color.blue;
+        }
+        else
+        {
+            Handles.color = Color.black;
+        }
+
+        if (end != null)
+        {
+            Handles.DrawLine(start.GetLocation(), end.GetLocation());
+        }
+        else
+        {
+            Handles.DrawLine(start.GetLocation(), endLocation);
         }
     }
 
-    void UpdateDragHandles( Event e)
+    void CheckForActionChange( Event e )
     {
         //check if user action has changed
 
@@ -237,15 +252,7 @@ public class PTPEditor : Editor
             action = ConnectionAction.Delete;
         }
 
-        //set color for the line
-        if (action == ConnectionAction.Add)
-        {
-            Handles.color = Color.blue;
-        }
-        else
-        {
-            Handles.color = Color.black;
-        }
+        
     }
 
     void CheckEndOfDrag( Event e )
@@ -261,6 +268,7 @@ public class PTPEditor : Editor
                 }
                 else
                 {
+                    start.RemoveConnection(end);
                 }
             }
 

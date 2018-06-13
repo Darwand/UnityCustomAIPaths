@@ -80,6 +80,20 @@ public class PTPPoint : ISerializationCallbackReceiver
         }
     }
 
+    public void RemoveConnection( PTPPoint point )
+    {
+        if(connectedPointWeight.ContainsKey(point))
+        {
+            DeleteConnection(point);
+            point.DeleteConnection(this);
+        }
+    }
+
+    void DeleteConnection( PTPPoint point )
+    {
+        connectedPointWeight.Remove(point);
+    }
+
     public Vector3 GetLocation()
     {
         return location;
