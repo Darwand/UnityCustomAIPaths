@@ -28,13 +28,18 @@ public class PTPEditor : Editor
     PTPPoint start;
     PTPPoint end;
     
-    float endSnapDist = 1f;
+    float targetSnapDistance = 150f;
 
 
     void OnEnable()
     {
         set = (PTPSet)target;
         LastTool = Tools.current;
+
+        currentSearch = SearchReason.None;
+        
+        start = null;
+        end = null;
     }
 
     void OnDisable()
@@ -96,40 +101,55 @@ public class PTPEditor : Editor
         {
             Vector2 screenLocation = e.mousePosition;
 
+            end = null;
+
             float closestDist = float.MaxValue;
 
             CheckMouseEvent(e);
 
             for (int i = 0; i < points.Count; i++)
             {
-                Handles.color = Color.white;
+                
+
+                if(points[i] == start)
+                {
+                    Handles.color = Color.green;
+                }
+                else
+                {
+                    Handles.color = Color.white;
+                }
+
                 Handles.SphereHandleCap(i, points[i].GetLocation(), Quaternion.identity, .75f, EventType.Repaint);
 
+                //todo REPLACE with more reliable system
                 if(currentSearch != SearchReason.None && Camera.current != null)
                 {
-                    Vector2 screen = Camera.current.WorldToScreenPoint(points[i].GetLocation());
+                    
+
+                    Vector2 screen = HandleUtility.WorldToGUIPoint(points[i].GetLocation());
+
 
                     float dist = Vector2.Distance(screen, screenLocation);
-                    if(currentSearch == SearchReason.Start)
+                    
+                    
+                    if(dist < closestDist && dist < targetSnapDistance)
                     {
-                        if(dist < closestDist)
+                        if(currentSearch == SearchReason.Start)
                         {
                             start = points[i];
                             closestDist = dist;
                         }
-                    }
-                    else
-                    {
-                        if(dist < closestDist && dist < endSnapDist)
+                        else if (points[i] != start)
                         {
-                            end = points[i];
                             closestDist = dist;
+                            end = points[i];
                         }
                     }
                 }
 
                 DrawPointWithConnections(points, i);
-               
+
             }
 
             UpdateDragHandles(e);
@@ -138,8 +158,6 @@ public class PTPEditor : Editor
             
             CheckEndOfDrag(e);
         }
-
-        Debug.Log(start != null);
     }
 
     void CheckMouseEvent( Event e )
@@ -153,8 +171,6 @@ public class PTPEditor : Editor
                 action = ConnectionAction.Add;
                 currentSearch = SearchReason.Start;
                 e.Use();
-
-                Debug.Log("Starting");
             }
             //remove connection
             else if (e.control)
@@ -173,6 +189,8 @@ public class PTPEditor : Editor
 
     void DrawPointWithConnections( List<PTPPoint> points, int index )
     {
+        Handles.color = Color.cyan;
+
         Dictionary<PTPPoint, float> connections = points[index].GetConnections();
 
         if (connections != null && connections.Count > 0)
@@ -193,7 +211,7 @@ public class PTPEditor : Editor
 
     void DrawDragLine( Event e )
     {
-        if (e.button == 0 && e.type == EventType.MouseDrag && start != null)
+        if (start != null)
         {
             if (end != null)
             {
@@ -201,23 +219,25 @@ public class PTPEditor : Editor
             }
             else
             {
-                Debug.Log("No End");
-                Handles.DrawLine(start.GetLocation(), Camera.current.ScreenToViewportPoint(e.mousePosition));
+                Handles.DrawLine(start.GetLocation(), HandleUtility.GUIPointToWorldRay(e.mousePosition).origin);
             }
         }
     }
 
     void UpdateDragHandles( Event e)
     {
-        if (e.type == EventType.KeyDown && e.keyCode == KeyCode.LeftShift || e.keyCode == KeyCode.RightShift)
+        //check if user action has changed
+
+        if (e.type == EventType.KeyDown && (e.keyCode == KeyCode.LeftShift || e.keyCode == KeyCode.RightShift))
         {
             action = ConnectionAction.Add;
         }
-        else if (e.type == EventType.KeyDown && e.keyCode == KeyCode.LeftControl || e.keyCode == KeyCode.RightControl)
+        else if (e.type == EventType.KeyDown && (e.keyCode == KeyCode.LeftControl || e.keyCode == KeyCode.RightControl))
         {
             action = ConnectionAction.Delete;
         }
 
+        //set color for the line
         if (action == ConnectionAction.Add)
         {
             Handles.color = Color.blue;
@@ -244,7 +264,7 @@ public class PTPEditor : Editor
                 }
             }
 
-            Debug.Log("Released");
+            currentSearch = SearchReason.None;
 
             start = null;
             end = null;
