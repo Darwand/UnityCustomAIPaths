@@ -19,15 +19,12 @@ public class PTPEditor : Editor
 
     Tool LastTool = Tool.None;
 
-    bool addingConnection = false;
-    bool removingConnection = false;
-
     ConnectionAction action;
     SearchReason currentSearch = SearchReason.None;
 
     PTPPoint start;
     PTPPoint end;
-    
+
     float targetSnapDistance = 150f;
 
 
@@ -37,7 +34,7 @@ public class PTPEditor : Editor
         LastTool = Tools.current;
 
         currentSearch = SearchReason.None;
-        
+
         start = null;
         end = null;
     }
@@ -54,118 +51,139 @@ public class PTPEditor : Editor
 
         Event e = Event.current;
 
-        if(e.type == EventType.KeyDown && e.keyCode == KeyCode.Space)
+        if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Space)
         {
             pointEditMode = !pointEditMode;
             e.Use();
         }
-        
+
 
         Handles.BeginGUI();
         if (GUILayout.Button(pointEditMode ? "Edit connections" : "Edit points", GUILayout.Width(120), GUILayout.Height(50)))
         {
             pointEditMode = !pointEditMode;
         }
-        
+
         Handles.EndGUI();
         List<PTPPoint> points = set.GetPointsInSet();
 
 
         if (pointEditMode)
         {
-            
-            for (int i = 0; i < points.Count; i++)
-            {
-                points[i].SetLocation(Handles.PositionHandle(points[i].GetLocation(), Quaternion.identity));
-
-
-                Dictionary<PTPPoint, float> connections = points[i].GetConnections();
-
-                if (connections != null && connections.Count > 0)
-                {
-                    foreach (KeyValuePair<PTPPoint, float> connection in connections)
-                    {
-                        int connectedId = points.IndexOf(connection.Key);
-
-                        if (connectedId > i)
-                        {
-                            Handles.DrawLine(points[i].GetLocation(), connection.Key.GetLocation());
-
-                            Handles.Label(Vector3.Lerp(points[i].GetLocation(), connection.Key.GetLocation(), .5f), connection.Value.ToString());
-                        }
-                    }
-                }
-            }
+            CreatePointEditor(points, e);
         }
         else
         {
-            Vector2 screenLocation = e.mousePosition;
+            CreateConnectionEditor(points, e);
+        }
+    }
 
-            PTPPoint newEnd = null;
+    void CreatePointEditor( List<PTPPoint> points, Event e )
+    {
 
-            float closestDist = float.MaxValue;
-
-            CheckMouseEvent(e);
-
-            for (int i = 0; i < points.Count; i++)
+        if (e.button == 0 && e.type == EventType.MouseDown)
+        {
+            if (e.shift)
             {
-                
+                AddPoint(e.mousePosition);
+            }
+        }
 
-                if(points[i] == start || points[i] == end)
-                {
-                    if (action == ConnectionAction.Add)
-                        Handles.color = Color.green;
-                    else
-                        Handles.color = Color.red;
-                }
+        for (int i = 0; i < points.Count; i++)
+        {
+            points[i].SetLocation(Handles.PositionHandle(points[i].GetLocation(), Quaternion.identity));
+
+            DrawConnections(points, i);
+        }
+    }
+
+    void AddPoint( Vector2 mousePos )
+    {
+        Ray mouseRay = HandleUtility.GUIPointToWorldRay(mousePos);
+        RaycastHit mouseHit;
+
+        if (Physics.Raycast(mouseRay, out mouseHit))
+        {
+            set.AddPoint(mouseHit.point);
+
+        }
+        else
+        {
+            //default location when not hitting a collider
+            Vector3 endLocation = mouseRay.origin + (mouseRay.direction * 10);
+
+            set.AddPoint(endLocation);
+        }
+    }
+
+    void CreateConnectionEditor( List<PTPPoint> points , Event e)
+    {
+        Vector2 screenLocation = e.mousePosition;
+
+        PTPPoint newEnd = null;
+
+        float closestDist = float.MaxValue;
+
+        CheckMouseEvent(e);
+
+        for (int i = 0; i < points.Count; i++)
+        {
+
+
+            if (points[i] == start || points[i] == end)
+            {
+                if (action == ConnectionAction.Add)
+                    Handles.color = Color.green;
                 else
+                    Handles.color = Color.red;
+            }
+            else
+            {
+                Handles.color = Color.white;
+            }
+
+            Handles.SphereHandleCap(i, points[i].GetLocation(), Quaternion.identity, .75f, EventType.Repaint);
+
+            //todo REPLACE with more reliable system
+            if (currentSearch != SearchReason.None && Camera.current != null)
+            {
+
+
+                Vector2 screen = HandleUtility.WorldToGUIPoint(points[i].GetLocation());
+
+
+                float dist = Vector2.Distance(screen, screenLocation);
+
+
+                if (dist < closestDist && dist < targetSnapDistance)
                 {
-                    Handles.color = Color.white;
-                }
-
-                Handles.SphereHandleCap(i, points[i].GetLocation(), Quaternion.identity, .75f, EventType.Repaint);
-
-                //todo REPLACE with more reliable system
-                if(currentSearch != SearchReason.None && Camera.current != null)
-                {
-                    
-
-                    Vector2 screen = HandleUtility.WorldToGUIPoint(points[i].GetLocation());
-
-
-                    float dist = Vector2.Distance(screen, screenLocation);
-                    
-                    
-                    if(dist < closestDist && dist < targetSnapDistance)
+                    if (currentSearch == SearchReason.Start)
                     {
-                        if(currentSearch == SearchReason.Start)
-                        {
-                            start = points[i];
-                            closestDist = dist;
-                        }
-                        else if (points[i] != start)
-                        {
-                            closestDist = dist;
-                            newEnd = points[i];
-                        }
+                        start = points[i];
+                        closestDist = dist;
+                    }
+                    else if (points[i] != start)
+                    {
+                        closestDist = dist;
+                        newEnd = points[i];
                     }
                 }
-
-                DrawPointWithConnections(points, i);
-
             }
 
-            end = newEnd;
+            DrawConnections(points, i);
 
-            CheckForActionChange(e);
-
-            if (start != null)
-            {
-                DrawLine(HandleUtility.GUIPointToWorldRay(e.mousePosition).origin);
-            }
-            
-            CheckEndOfDrag(e);
         }
+
+        end = newEnd;
+
+        CheckForActionChange(e);
+
+        if (start != null)
+        {
+            DrawLine(HandleUtility.GUIPointToWorldRay(e.mousePosition).origin);
+        }
+
+        CheckEndOfDrag(e);
     }
 
     void CheckMouseEvent( Event e )
@@ -195,7 +213,7 @@ public class PTPEditor : Editor
         }
     }
 
-    void DrawPointWithConnections( List<PTPPoint> points, int index )
+    void DrawConnections( List<PTPPoint> points, int index )
     {
         Handles.color = Color.cyan;
 
